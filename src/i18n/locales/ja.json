@@ -41,12 +41,14 @@
     "name": "Name",
     "deadline": "Deadline",
     "categories": "Categories",
+    "priority": "Priority",
     "created_date": "Created date",
     "updated_date": "Updated date",
     "search_name": "Search by name",
     "enter_name": "Enter todo name",
     "select_deadline": "Select deadline",
-    "select_categories": "Select categories"
+    "select_categories": "Select categories",
+    "select_priorities": "Select priorities"
   },
   "priority": {
     "low": "Low",
