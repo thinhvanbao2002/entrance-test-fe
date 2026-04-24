@@ -1,3 +1,4 @@
+import { useDebounce } from 'ahooks';
 import { Button, DatePicker, Input, Select, TableProps } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 import { FormProps } from 'antd/lib';
@@ -43,12 +44,19 @@ const ListTodosPage: FC = () => {
   const [data, setData] = useState<ListTodosResponse>();
   const [loadingGet, setLoadingGet] = useState(false);
   const [categories, setCategories] = useState<CategoryEntity[]>([]);
+  const [categoryKeyword, setCategoryKeyword] = useState<string>();
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const debouncedCategoryKeyword = useDebounce(categoryKeyword, { wait: 500 });
 
   const [form] = useForm();
 
   useEffect(() => {
-    categoryRequest.list({ take: 100 }).then((res) => setCategories(res.categories));
-  }, []);
+    setLoadingCategories(true);
+    categoryRequest
+      .list({ take: 20, keyword: debouncedCategoryKeyword })
+      .then((res) => setCategories(res.categories))
+      .finally(() => setLoadingCategories(false));
+  }, [debouncedCategoryKeyword]);
 
   useEffect(() => {
     const { deadlineFrom, deadlineTo, ...rest } = query;
@@ -85,8 +93,8 @@ const ListTodosPage: FC = () => {
     const { deadline, ...rest } = values;
     setQuery({
       ...rest,
-      deadlineFrom: deadline?.[0]?.toISOString(),
-      deadlineTo: deadline?.[1]?.toISOString(),
+      deadlineFrom: deadline?.[0] ? datetime(deadline[0]).startOf('day').toISOString() : undefined,
+      deadlineTo: deadline?.[1] ? datetime(deadline[1]).endOf('day').toISOString() : undefined,
       page: 1,
     });
   };
@@ -157,6 +165,10 @@ const ListTodosPage: FC = () => {
                 placeholder={t('todo.select_categories')}
                 options={categories.map((e) => ({ label: e.name, value: e.id }))}
                 allowClear
+                showSearch
+                onSearch={setCategoryKeyword}
+                filterOption={false}
+                loading={loadingCategories}
               />
             </AppForm.Item>
             <AppForm.Item name="priorities" label={t('todo.priority')}>
