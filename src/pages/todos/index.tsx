@@ -1,7 +1,8 @@
 import { useDebounce } from 'ahooks';
-import { Button, DatePicker, Input, Select, TableProps } from 'antd';
+import { Button, Input, Select, TableProps } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 import { FormProps } from 'antd/lib';
+import { omit } from 'lodash';
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AiOutlinePlus } from 'react-icons/ai';
@@ -9,8 +10,10 @@ import { PiTrash } from 'react-icons/pi';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppCard } from '../../components/common/app-card/AppCard';
 import { AppForm } from '../../components/common/app-form/AppForm';
+import { MultiFormItem } from '../../components/common/app-form/multi-form-item/MultiFormItem';
 import { AppTable } from '../../components/common/app-table/AppTable';
 import { BasePage } from '../../components/common/base-page/BasePage';
+import { AppRangePicker } from '../../components/inputs/app-range-picker/AppRangePicker';
 import { useAppModal } from '../../components/modal-provider/ModalProvider';
 import { notify } from '../../components/notify-provider/NotifyProvider';
 import { defaultPageSize } from '../../constants/pagination.constant';
@@ -21,18 +24,17 @@ import { todoRequest } from '../../requests/todo.request';
 import { CategoryEntity } from '../../types/entities/category.entity';
 import { ListTodosQuery, ListTodosResponse, TodoItem } from '../../types/requests/todo.type';
 import { datetime } from '../../utils/datetime.util';
+import { enumValues } from '../../utils/enum-values.util';
 import { parseNumber, parseNumberArray, parseString, useQuery } from '../../utils/use-query.util';
-
-const { RangePicker } = DatePicker;
 
 const queryTypes = {
   keyword: parseString(),
-  page: parseNumber(1),
-  pageSize: parseNumber(defaultPageSize),
   deadlineFrom: parseString(),
   deadlineTo: parseString(),
   categoryIds: parseNumberArray(),
   priorities: parseNumberArray(),
+  page: parseNumber(1),
+  pageSize: parseNumber(defaultPageSize),
 };
 
 const ListTodosPage: FC = () => {
@@ -48,7 +50,7 @@ const ListTodosPage: FC = () => {
   const [loadingCategories, setLoadingCategories] = useState(false);
   const debouncedCategoryKeyword = useDebounce(categoryKeyword, { wait: 500 });
 
-  const [form] = useForm();
+  const [form] = useForm<ListTodosQuery>();
 
   useEffect(() => {
     setLoadingCategories(true);
@@ -57,14 +59,6 @@ const ListTodosPage: FC = () => {
       .then((res) => setCategories(res.categories))
       .finally(() => setLoadingCategories(false));
   }, [debouncedCategoryKeyword]);
-
-  useEffect(() => {
-    const { deadlineFrom, deadlineTo, ...rest } = query;
-    form.setFieldsValue({
-      ...rest,
-      deadline: deadlineFrom && deadlineTo ? [datetime(deadlineFrom), datetime(deadlineTo)] : undefined,
-    });
-  }, [form, query]);
 
   const getData = useCallback(async () => {
     try {
@@ -89,14 +83,12 @@ const ListTodosPage: FC = () => {
     getData();
   }, [getData]);
 
-  const handleSearch: FormProps<any>['onFinish'] = (values) => {
-    const { deadline, ...rest } = values;
-    setQuery({
-      ...rest,
-      deadlineFrom: deadline?.[0] ? datetime(deadline[0]).startOf('day').toISOString() : undefined,
-      deadlineTo: deadline?.[1] ? datetime(deadline[1]).endOf('day').toISOString() : undefined,
-      page: 1,
-    });
+  useEffect(() => {
+    form.setFieldsValue(omit(query, 'page', 'pageSize'));
+  }, [form, query]);
+
+  const handleSearch: FormProps<ListTodosQuery>['onFinish'] = (values) => {
+    setQuery((prev) => ({ ...prev, ...values, page: 1 }));
   };
 
   const columns = useMemo(() => {
@@ -152,12 +144,9 @@ const ListTodosPage: FC = () => {
     <BasePage>
       <AppCard>
         <AppForm form={form} onFinish={handleSearch}>
-          <div className="grid grid-cols-1 gap-x-12 sm:grid-cols-2 md:grid-cols-4">
+          <div className="app-filter-form">
             <AppForm.Item name="keyword" label={t('todo.name')}>
-              <Input placeholder={t('todo.search_name')} onPressEnter={form.submit} />
-            </AppForm.Item>
-            <AppForm.Item name="deadline" label={t('todo.deadline')}>
-              <RangePicker className="w-full" />
+              <Input placeholder={t('todo.search_name')} />
             </AppForm.Item>
             <AppForm.Item name="categoryIds" label={t('todo.categories')}>
               <Select
@@ -175,28 +164,33 @@ const ListTodosPage: FC = () => {
               <Select
                 mode="multiple"
                 placeholder={t('todo.select_priorities')}
-                options={Object.values(Priority)
-                  .filter((v) => typeof v === 'number')
-                  .map((v) => ({
-                    label: t(`priority.${Priority[v as number].toLowerCase()}`),
-                    value: v,
-                  }))}
+                options={enumValues(Priority).map((e) => ({ value: e, label: t(`enum.priority.${e}`) }))}
                 allowClear
               />
             </AppForm.Item>
-          </div>
-          <div className="flex justify-end gap-8">
-            <Button
-              onClick={() => {
-                form.resetFields();
-                setQuery({});
-              }}
-            >
-              {t('common.clear')}
-            </Button>
-            <Button type="primary" onClick={form.submit}>
-              {t('common.search')}
-            </Button>
+            <MultiFormItem names={['deadlineFrom', 'deadlineTo']} label={t('todo.deadline')}>
+              <AppRangePicker
+                nullable={false}
+                picker="date"
+                displayFormat={DateTimeFormat.Date}
+                valueFormat={DateTimeFormat.DateTimeValue}
+              />
+            </MultiFormItem>
+            <AppForm.Item label=" ">
+              <div className="flex items-end justify-end gap-8">
+                <Button
+                  onClick={() => {
+                    form.resetFields();
+                    setQuery({});
+                  }}
+                >
+                  {t('common.clear')}
+                </Button>
+                <Button type="primary" htmlType="submit">
+                  {t('common.search')}
+                </Button>
+              </div>
+            </AppForm.Item>
           </div>
         </AppForm>
       </AppCard>
