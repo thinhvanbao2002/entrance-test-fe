@@ -1,6 +1,8 @@
-import { Button, Input, TableProps } from 'antd';
+import { useDebounce } from 'ahooks';
+import { Button, Input, Select, TableProps } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 import { FormProps } from 'antd/lib';
+import { omit } from 'lodash';
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AiOutlinePlus } from 'react-icons/ai';
@@ -8,19 +10,29 @@ import { PiTrash } from 'react-icons/pi';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppCard } from '../../components/common/app-card/AppCard';
 import { AppForm } from '../../components/common/app-form/AppForm';
+import { MultiFormItem } from '../../components/common/app-form/multi-form-item/MultiFormItem';
 import { AppTable } from '../../components/common/app-table/AppTable';
 import { BasePage } from '../../components/common/base-page/BasePage';
+import { AppRangePicker } from '../../components/inputs/app-range-picker/AppRangePicker';
 import { useAppModal } from '../../components/modal-provider/ModalProvider';
 import { notify } from '../../components/notify-provider/NotifyProvider';
 import { defaultPageSize } from '../../constants/pagination.constant';
 import { DateTimeFormat } from '../../enums/date-time-format.enum';
+import { Priority } from '../../enums/priority.enum';
+import { categoryRequest } from '../../requests/category.request';
 import { todoRequest } from '../../requests/todo.request';
+import { CategoryEntity } from '../../types/entities/category.entity';
 import { ListTodosQuery, ListTodosResponse, TodoItem } from '../../types/requests/todo.type';
 import { datetime } from '../../utils/datetime.util';
-import { parseNumber, parseString, useQuery } from '../../utils/use-query.util';
+import { enumValues } from '../../utils/enum-values.util';
+import { parseNumber, parseNumberArray, parseString, useQuery } from '../../utils/use-query.util';
 
 const queryTypes = {
   keyword: parseString(),
+  deadlineFrom: parseString(),
+  deadlineTo: parseString(),
+  categoryIds: parseNumberArray(),
+  priorities: parseNumberArray(),
   page: parseNumber(1),
   pageSize: parseNumber(defaultPageSize),
 };
@@ -33,8 +45,20 @@ const ListTodosPage: FC = () => {
   const [query, setQuery] = useQuery(queryTypes);
   const [data, setData] = useState<ListTodosResponse>();
   const [loadingGet, setLoadingGet] = useState(false);
+  const [categories, setCategories] = useState<CategoryEntity[]>([]);
+  const [categoryKeyword, setCategoryKeyword] = useState<string>();
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const debouncedCategoryKeyword = useDebounce(categoryKeyword, { wait: 500 });
 
   const [form] = useForm<ListTodosQuery>();
+
+  useEffect(() => {
+    setLoadingCategories(true);
+    categoryRequest
+      .list({ take: 20, keyword: debouncedCategoryKeyword })
+      .then((res) => setCategories(res.categories))
+      .finally(() => setLoadingCategories(false));
+  }, [debouncedCategoryKeyword]);
 
   const getData = useCallback(async () => {
     try {
@@ -59,7 +83,13 @@ const ListTodosPage: FC = () => {
     getData();
   }, [getData]);
 
-  const handleSearch: FormProps<ListTodosQuery>['onFinish'] = (values) => {};
+  useEffect(() => {
+    form.setFieldsValue(omit(query, 'page', 'pageSize'));
+  }, [form, query]);
+
+  const handleSearch: FormProps<ListTodosQuery>['onFinish'] = (values) => {
+    setQuery((prev) => ({ ...prev, ...values, page: 1 }));
+  };
 
   const columns = useMemo(() => {
     return [
@@ -118,6 +148,34 @@ const ListTodosPage: FC = () => {
             <AppForm.Item name="keyword" label={t('todo.name')}>
               <Input placeholder={t('todo.search_name')} />
             </AppForm.Item>
+            <AppForm.Item name="categoryIds" label={t('todo.categories')}>
+              <Select
+                mode="multiple"
+                placeholder={t('todo.select_categories')}
+                options={categories.map((e) => ({ label: e.name, value: e.id }))}
+                allowClear
+                showSearch
+                onSearch={setCategoryKeyword}
+                filterOption={false}
+                loading={loadingCategories}
+              />
+            </AppForm.Item>
+            <AppForm.Item name="priorities" label={t('todo.priority')}>
+              <Select
+                mode="multiple"
+                placeholder={t('todo.select_priorities')}
+                options={enumValues(Priority).map((e) => ({ value: e, label: t(`enum.priority.${e}`) }))}
+                allowClear
+              />
+            </AppForm.Item>
+            <MultiFormItem names={['deadlineFrom', 'deadlineTo']} label={t('todo.deadline')}>
+              <AppRangePicker
+                nullable={false}
+                picker="date"
+                displayFormat={DateTimeFormat.Date}
+                valueFormat={DateTimeFormat.DateTimeValue}
+              />
+            </MultiFormItem>
             <AppForm.Item label=" ">
               <div className="flex items-end justify-end gap-8">
                 <Button
@@ -128,7 +186,7 @@ const ListTodosPage: FC = () => {
                 >
                   {t('common.clear')}
                 </Button>
-                <Button type="primary" onClick={form.submit}>
+                <Button type="primary" htmlType="submit">
                   {t('common.search')}
                 </Button>
               </div>

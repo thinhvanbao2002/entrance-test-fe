@@ -12,7 +12,12 @@ export type ListTodosResponse = {
   total: number;
 };
 
-export type ListTodosQuery = ListQuery;
+export type ListTodosQuery = ListQuery & {
+  deadlineFrom?: string;
+  deadlineTo?: string;
+  categoryIds?: number[];
+  priorities?: number[];
+};
 
 export type TodoDetail = TodoItem & {};
 
